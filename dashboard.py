@@ -2,6 +2,11 @@ import argparse
 from pathlib import Path
 
 from parser import parse_state
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+console = Console()
 
 
 def main() -> None:
@@ -14,9 +19,12 @@ def main() -> None:
 
     state = parse_state(args.log, args.mdp)
 
-    print(f"Step: {state.current_step:,} / {state.total_steps:,}")
-    print(f"Time: {state.simulated_time_ns:.3f} ns")
-    print(f"Progress: {state.progress_percent:.2f}%")
+    table = Table(show_header=False)
+    table.add_row("Step", f"{state.current_step:,} / {state.total_steps:,}")
+    table.add_row("Simulated time", f"{state.simulated_time_ns:.3f} ns")
+    table.add_row("Progress", f"{state.progress_percent:.2f}%")
+
+    console.print(Panel(table, title="GROMACS Simulation"))
 
 
 if __name__ == "__main__":
