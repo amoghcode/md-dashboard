@@ -12,6 +12,6 @@ class SimulationState:
 
     @property
     def progress_percent(self) -> float:
-        if self.total_Steps <= 0:
+        if self.total_steps <= 0:
             return 0.0
         return 100 * self.current_step / self.total_steps
