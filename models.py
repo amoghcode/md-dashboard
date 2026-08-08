@@ -47,3 +47,13 @@ class SimulationState:
         if self.current_step is None or not self.total_steps or self.total_steps <= 0:
             return None
         return max(0.0, min(100.0, 100.0 * self.current_step / self.total_steps))
+
+
+@dataclass(frozen=True)
+class MonitorSnapshot:
+    """Parsed state plus metrics derived from live wall-clock samples."""
+
+    state: SimulationState
+    speed_ns_day: float | None = None
+    eta_seconds: float | None = None
+    speed_source: str | None = None
