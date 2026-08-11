@@ -1,1 +1,15 @@
 .venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# GROMACS outputs are large and should remain outside this source repository.
+*.cpt
+*.edr
+*.gro
+*.log
+*.tpr
+*.trr
+*.xtc
+*.xvg
