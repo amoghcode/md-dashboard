@@ -52,18 +52,7 @@ python dashboard.py \
 Press `Ctrl+C` to exit. Use `--refresh 5` to change the two-second polling
 interval. The minimum is 0.2 seconds.
 
-The MDP is optional because a normal GROMACS log includes `nsteps` and `dt` in
-its Input Parameters section:
 
-```bash
-python dashboard.py --log /path/to/npt_prod.log --once
-```
-
-Machine-readable output:
-
-```bash
-python dashboard.py --log /path/to/npt_prod.log --mdp /path/to/npt_prod.mdp --json
-```
 
 ## Metric definitions
 
@@ -103,7 +92,7 @@ tests/         Parser and calculation tests
 ## Limitations
 
 - This tool monitors an existing log; it does not start or terminate GROMACS.
-- Temperature and pressure are parsed from log text, not the binary `.edr` file.
+- Temperature and pressure are parsed from log text.
 - A static partial log cannot reveal speed. Live speed requires observing it grow.
-- A log alone cannot prove process liveness. An unfinished log with progress is
+- An unfinished log with progress is
   shown as running even if its external process was stopped between refreshes.
