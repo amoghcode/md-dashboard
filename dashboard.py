@@ -134,8 +134,8 @@ def build_dashboard(snapshot: MonitorSnapshot, log_path: Path) -> Group:
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Monitor a GROMACS simulation log.")
-    parser.add_argument("--log", "-l", required=True, type=Path)
+    parser = argparse.ArgumentParser(description="MD project TUI and GROMACS run monitor.")
+    parser.add_argument("--log", "-l", type=Path, help="GROMACS log to monitor")
     parser.add_argument(
         "--mdp",
         "-m",
@@ -145,6 +145,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--refresh", type=float, default=2.0)
     parser.add_argument("--once", action="store_true", help="Render once and exit")
     parser.add_argument("--json", action="store_true", help="Print one JSON snapshot and exit")
+    parser.add_argument(
+        "--check-environment",
+        action="store_true",
+        help="Inspect Python dependencies and GROMACS, then exit",
+    )
     return parser
 
 
@@ -156,31 +161,59 @@ def _json_default(value: Any) -> Any:
     raise TypeError(f"Cannot serialize {type(value).__name__}")
 
 
-def main() -> None:
-    args = build_argument_parser().parse_args()
-    if args.refresh < 0.2:
-        raise SystemExit("--refresh must be at least 0.2 seconds")
-
-    monitor = SimulationMonitor(args.log, args.mdp)
-    console = Console()
-    if args.json:
-        print(json.dumps(asdict(monitor.snapshot()), default=_json_default, indent=2))
-        return
-    if args.once:
-        console.print(build_dashboard(monitor.snapshot(), args.log))
-        return
-
+def run_live_monitor(log_path: Path, mdp_path: Path | None, refresh: float, console: Console) -> None:
+    monitor = SimulationMonitor(log_path, mdp_path)
     try:
         with Live(
-            build_dashboard(monitor.snapshot(), args.log),
+            build_dashboard(monitor.snapshot(), log_path),
             console=console,
             refresh_per_second=4,
         ) as live:
             while True:
-                time.sleep(args.refresh)
-                live.update(build_dashboard(monitor.snapshot(), args.log), refresh=True)
+                time.sleep(refresh)
+                live.update(build_dashboard(monitor.snapshot(), log_path), refresh=True)
     except KeyboardInterrupt:
         console.print("\n[dim]Monitor stopped.[/dim]")
+
+
+def main() -> None:
+    parser = build_argument_parser()
+    args = parser.parse_args()
+    console = Console()
+
+    if args.log is None:
+        if args.mdp or args.once:
+            parser.error("--mdp and --once require --log")
+        if args.refresh != 2.0:
+            parser.error("--refresh requires --log")
+        if args.check_environment or args.json:
+            from environment import inspect_environment, report_as_dict
+
+            report = inspect_environment()
+            if args.json:
+                print(json.dumps(report_as_dict(report), indent=2, default=str))
+            else:
+                from tui import build_environment_view
+
+                console.print(build_environment_view(report))
+            return
+        from tui import launch_tui
+
+        launch_tui()
+        return
+
+    if args.check_environment:
+        parser.error("--check-environment cannot be combined with --log")
+    if args.refresh < 0.2:
+        parser.error("--refresh must be at least 0.2 seconds")
+
+    monitor = SimulationMonitor(args.log, args.mdp)
+    if args.json:
+        print(json.dumps(asdict(monitor.snapshot()), default=_json_default, indent=2))
+    elif args.once:
+        console.print(build_dashboard(monitor.snapshot(), args.log))
+    else:
+        run_live_monitor(args.log, args.mdp, args.refresh, console)
 
 
 if __name__ == "__main__":

@@ -1,2 +1,3 @@
 rich>=13.7,<15
+textual>=8.2,<9
 pytest>=8,<10
