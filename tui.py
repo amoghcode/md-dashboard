@@ -23,9 +23,9 @@ from rich.table import Table
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Header, Input, Static, TabbedContent, TabPane
+from textual.widgets import Button, ContentSwitcher, Footer, Header, Input, Static, TabbedContent, TabPane
 
 
 STATUS_STYLE = {
@@ -310,7 +310,7 @@ class MDPipelineApp(App[None]):
     """First navigable Textual prototype for the MD workflow."""
 
     TITLE = "Molecular Dynamics Pipeline"
-    SUB_TITLE = "Environment setup prototype"
+    SUB_TITLE = "Environment setup and analysis prototype"
     BINDINGS = [("ctrl+q", "quit", "Quit"), ("ctrl+r", "refresh_environment", "Refresh checks")]
 
     CSS = """
@@ -323,7 +323,7 @@ class MDPipelineApp(App[None]):
     VerticalScroll {
         height: 1fr;
     }
-    #home-summary, #environment-view, #setup-copy {
+    #home-summary, #environment-view, #setup-copy, #analysis-intro {
         height: auto;
         margin-bottom: 1;
     }
@@ -375,6 +375,7 @@ class MDPipelineApp(App[None]):
                         yield Button("Setup guidance", id="goto-setup")
                         yield Button("Configure GROMACS", id="goto-gromacs")
                         yield Button("Monitor a log", id="goto-monitor")
+                        yield Button("Analysis", id="goto-analysis")
             with TabPane("Environment", id="environment"):
                 with VerticalScroll():
                     yield Static("Environment scan running…", id="environment-view")
@@ -405,6 +406,29 @@ class MDPipelineApp(App[None]):
                         yield Button("Start monitoring", id="start-monitor", variant="primary")
                     yield Static("Enter a log path to begin.", id="monitor-status")
                     yield Static("", id="monitor-view")
+            with TabPane("Analysis", id="analysis"):
+                with VerticalScroll():
+                    yield Static(
+                        "Choose an analysis category. Analysis methods will be connected when their scripts are available.",
+                        id="analysis-intro",
+                    )
+                    with Horizontal(id="analysis-categories"):
+                        yield Button("Structural", id="analysis-structural", variant="primary")
+                        yield Button("Thermodynamic", id="analysis-thermodynamic")
+                    with ContentSwitcher(initial="analysis-start", id="analysis-content"):
+                        yield Static("Select Structural or Thermodynamic to continue.", id="analysis-start")
+                        with Vertical(id="analysis-structural-view"):
+                            yield Static(
+                                "Structural analysis placeholders. These buttons are not connected to analysis scripts yet."
+                            )
+                            with Horizontal(id="analysis-methods"):
+                                yield Button("RMSD", id="analysis-rmsd", disabled=True)
+                                yield Button("RMSF", id="analysis-rmsf", disabled=True)
+                                yield Button("Radius of Gyration", id="analysis-rog", disabled=True)
+                        with Vertical(id="analysis-thermodynamic-view"):
+                            yield Static(
+                                "Thermodynamic analysis methods have not been supplied yet. Their options will appear here."
+                            )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -436,9 +460,14 @@ class MDPipelineApp(App[None]):
             "goto-setup": "setup",
             "goto-gromacs": "gromacs",
             "goto-monitor": "monitor",
+            "goto-analysis": "analysis",
         }
         if button_id in destinations:
             self.query_one(TabbedContent).active = destinations[button_id]
+        elif button_id == "analysis-structural":
+            self.query_one(ContentSwitcher).current = "analysis-structural-view"
+        elif button_id == "analysis-thermodynamic":
+            self.query_one(ContentSwitcher).current = "analysis-thermodynamic-view"
         elif button_id == "refresh-environment":
             self.action_refresh_environment()
         elif button_id == "setup-python":
