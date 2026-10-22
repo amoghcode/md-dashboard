@@ -34,8 +34,8 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe dashboard.py
 ```
 
-The first launch opens the Overview tab. Use the tabs or the overview buttons to
-move between screens. Press `Ctrl+Q` to quit.
+The first launch opens the Overview tab. Use the tab bar to move between
+screens. Press `Ctrl+Q` to quit.
 
 ### Ubuntu or WSL2
 
