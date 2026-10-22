@@ -3,8 +3,8 @@
 A Textual terminal prototype for molecular-dynamics project setup and GROMACS
 run monitoring. The overview shows the planned scientific workflow and checks
 the current Python and GROMACS environment. Separate tabs provide setup
-guidance, GROMACS command verification, and monitoring for existing `mdrun`
-logs.
+guidance, GROMACS command verification, monitoring for existing `mdrun` logs,
+and an analysis workspace placeholder for methods that will be supplied later.
 
 ## Features
 
@@ -13,6 +13,7 @@ logs.
 - Guided setup instructions for missing Python dependencies or GROMACS
 - Verify and save a GROMACS executable command in per-user settings
 - Workflow preview from project setup through analysis
+- Analysis tab with Structural and Thermodynamic categories; Structural shows disabled RMSD, RMSF, and Radius of Gyration placeholders
 - Current step, simulated time, progress percentage, speed, and ETA
 - Latest temperature and pressure parsed from the GROMACS log
 - Warning and LINCS warning detection
@@ -131,9 +132,12 @@ For a manual TUI smoke check, launch `python dashboard.py` and:
    asks for confirmation before installing into `.venv`.
 4. If GROMACS is installed, enter `gmx` (or its executable path), verify it, and
    optionally save the verified command.
-5. Open Monitor, enter a GROMACS log path and optional MDP path, then start
+5. Open Analysis, select Structural, and confirm RMSD, RMSF, and Radius of
+   Gyration appear as disabled placeholders. Select Thermodynamic to see its
+   placeholder. Neither option runs analysis or generates results.
+6. Open Monitor, enter a GROMACS log path and optional MDP path, then start
    monitoring. Use a real existing log to see parsed progress and metrics.
-6. Press `Ctrl+Q` to exit.
+7. Press `Ctrl+Q` to exit.
 
 The automated tests cover completed, partial, empty, missing, warning, and
 fatal-error logs, plus unit conversion, speed, ETA, and restarted simulations.
