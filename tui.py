@@ -327,7 +327,7 @@ class MDPipelineApp(App[None]):
         height: auto;
         margin-bottom: 1;
     }
-    #home-actions, #setup-actions, #gromacs-actions, #monitor-actions {
+    #setup-actions, #gromacs-actions, #monitor-actions {
         height: auto;
         margin: 1 0;
     }
@@ -375,12 +375,6 @@ class MDPipelineApp(App[None]):
             with TabPane("Overview", id="home"):
                 with VerticalScroll():
                     yield Static("Scanning this machine's Python and GROMACS environment…", id="home-summary")
-                    with Horizontal(id="home-actions"):
-                        yield Button("Environment checks", id="goto-environment", variant="primary")
-                        yield Button("Setup guidance", id="goto-setup")
-                        yield Button("Configure GROMACS", id="goto-gromacs")
-                        yield Button("Monitor a log", id="goto-monitor")
-                        yield Button("Analysis", id="goto-analysis")
             with TabPane("Environment", id="environment"):
                 with VerticalScroll():
                     yield Static("Environment scan running…", id="environment-view")
@@ -454,16 +448,7 @@ class MDPipelineApp(App[None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
-        destinations = {
-            "goto-environment": "environment",
-            "goto-setup": "setup",
-            "goto-gromacs": "gromacs",
-            "goto-monitor": "monitor",
-            "goto-analysis": "analysis",
-        }
-        if button_id in destinations:
-            self.query_one(TabbedContent).active = destinations[button_id]
-        elif button_id == "analysis-structural":
+        if button_id == "analysis-structural":
             self.query_one("#analysis-structural-view", Vertical).display = True
         elif button_id == "refresh-environment":
             self.action_refresh_environment()
