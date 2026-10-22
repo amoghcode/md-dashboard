@@ -13,7 +13,7 @@ and an analysis workspace placeholder for methods that will be supplied later.
 - Guided setup instructions for missing Python dependencies or GROMACS
 - Verify and save a GROMACS executable command in per-user settings
 - Workflow preview from project setup through analysis
-- Analysis tab with Structural and Thermodynamic categories; Structural shows disabled RMSD, RMSF, and Radius of Gyration placeholders
+- Analysis tab with Structural and Thermodynamic categories; Structural reveals inert RMSD, RMSF, and RoG placeholder buttons
 - Current step, simulated time, progress percentage, speed, and ETA
 - Latest temperature and pressure parsed from the GROMACS log
 - Warning and LINCS warning detection
@@ -132,9 +132,8 @@ For a manual TUI smoke check, launch `python dashboard.py` and:
    asks for confirmation before installing into `.venv`.
 4. If GROMACS is installed, enter `gmx` (or its executable path), verify it, and
    optionally save the verified command.
-5. Open Analysis, select Structural, and confirm RMSD, RMSF, and Radius of
-   Gyration appear as disabled placeholders. Select Thermodynamic to see its
-   placeholder. Neither option runs analysis or generates results.
+5. Open Analysis and select Structural to reveal RMSD, RMSF, and RoG buttons.
+   Confirm that selecting these buttons or Thermodynamic has no effect.
 6. Open Monitor, enter a GROMACS log path and optional MDP path, then start
    monitoring. Use a real existing log to see parsed progress and metrics.
 7. Press `Ctrl+Q` to exit.

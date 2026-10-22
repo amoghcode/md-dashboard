@@ -25,7 +25,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, ContentSwitcher, Footer, Header, Input, Static, TabbedContent, TabPane
+from textual.widgets import Button, Footer, Header, Input, Static, TabbedContent, TabPane
 
 
 STATUS_STYLE = {
@@ -331,6 +331,11 @@ class MDPipelineApp(App[None]):
         height: auto;
         margin: 1 0;
     }
+    #analysis-structural-view {
+        display: none;
+        height: auto;
+        margin-top: 1;
+    }
     Button {
         margin-right: 1;
     }
@@ -409,26 +414,20 @@ class MDPipelineApp(App[None]):
             with TabPane("Analysis", id="analysis"):
                 with VerticalScroll():
                     yield Static(
-                        "Choose an analysis category. Analysis methods will be connected when their scripts are available.",
+                        "Select Structural to reveal its placeholder options. Thermodynamic is reserved for a future update.",
                         id="analysis-intro",
                     )
                     with Horizontal(id="analysis-categories"):
                         yield Button("Structural", id="analysis-structural", variant="primary")
                         yield Button("Thermodynamic", id="analysis-thermodynamic")
-                    with ContentSwitcher(initial="analysis-start", id="analysis-content"):
-                        yield Static("Select Structural or Thermodynamic to continue.", id="analysis-start")
-                        with Vertical(id="analysis-structural-view"):
-                            yield Static(
-                                "Structural analysis placeholders. These buttons are not connected to analysis scripts yet."
-                            )
-                            with Horizontal(id="analysis-methods"):
-                                yield Button("RMSD", id="analysis-rmsd", disabled=True)
-                                yield Button("RMSF", id="analysis-rmsf", disabled=True)
-                                yield Button("Radius of Gyration", id="analysis-rog", disabled=True)
-                        with Vertical(id="analysis-thermodynamic-view"):
-                            yield Static(
-                                "Thermodynamic analysis methods have not been supplied yet. Their options will appear here."
-                            )
+                    with Vertical(id="analysis-structural-view"):
+                        yield Static(
+                            "These options are placeholders; selecting one currently has no effect."
+                        )
+                        with Horizontal(id="analysis-methods"):
+                            yield Button("RMSD", id="analysis-rmsd")
+                            yield Button("RMSF", id="analysis-rmsf")
+                            yield Button("RoG", id="analysis-rog")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -465,9 +464,7 @@ class MDPipelineApp(App[None]):
         if button_id in destinations:
             self.query_one(TabbedContent).active = destinations[button_id]
         elif button_id == "analysis-structural":
-            self.query_one(ContentSwitcher).current = "analysis-structural-view"
-        elif button_id == "analysis-thermodynamic":
-            self.query_one(ContentSwitcher).current = "analysis-thermodynamic-view"
+            self.query_one("#analysis-structural-view", Vertical).display = True
         elif button_id == "refresh-environment":
             self.action_refresh_environment()
         elif button_id == "setup-python":
