@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +11,11 @@ from typing import Any
 from environment import (
     EnvironmentCheck,
     EnvironmentReport,
+    GROMACS_GPU_BUILD_VERSION,
+    GromacsInstallPlan,
     GromacsInstallation,
+    gromacs_install_plan,
+    install_gromacs,
     inspect_environment,
     probe_gromacs,
     save_gromacs_command,
@@ -115,7 +119,11 @@ def build_home(report: EnvironmentReport) -> Group:
     )
 
 
-def _setup_instructions(report: EnvironmentReport) -> list[Panel]:
+def _setup_instructions(
+    report: EnvironmentReport,
+    install_plan: GromacsInstallPlan | None = None,
+    install_problem: str = "",
+) -> list[Panel]:
     panels: list[Panel] = []
     missing_python = [check.name for check in report.required_packages if check.status == "missing"]
     if report.python_check.status == "missing":
@@ -151,32 +159,56 @@ def _setup_instructions(report: EnvironmentReport) -> list[Panel]:
     else:
         panels.append(Panel("Python and required runtime packages are ready.", title="Python", border_style="green"))
 
-    if not report.installation:
-        if os.name == "nt":
-            instructions = (
-                "This prototype targets GROMACS through Ubuntu on WSL2. Install WSL2 and an Ubuntu distribution, "
-                "then run the project from the Ubuntu terminal. Inside Ubuntu, install GROMACS with your "
-                "distribution package manager, for example:\n\n"
-                "sudo apt update\nsudo apt install gromacs python3-venv\n\n"
-                "Rerun the environment check from Ubuntu to verify the installation."
-            )
-        elif shutil.which("apt-get"):
-            instructions = (
-                "GROMACS was not found. On this Debian/Ubuntu environment, install it from a system terminal:\n\n"
-                "sudo apt update\nsudo apt install gromacs\n\n"
-                "Rerun the environment check after installation."
-            )
+    cuda_upgrade_needed = bool(
+        install_plan
+        and install_plan.gpu_backend
+        and (not report.installation or report.installation.gpu_backend != install_plan.gpu_backend)
+    )
+    if install_plan and install_plan.gpu_backend:
+        if cuda_upgrade_needed:
+            if report.installation:
+                gromacs_text = (
+                    f"{report.installation.detail} A compatible NVIDIA GPU was detected. Setup can build "
+                    f"GROMACS {GROMACS_GPU_BUILD_VERSION} with CUDA GPU support for this device."
+                )
+            else:
+                gromacs_text = (
+                    f"A compatible NVIDIA GPU was detected. Setup can install the CUDA toolkit and build "
+                    f"GROMACS {GROMACS_GPU_BUILD_VERSION} with CUDA GPU support. This takes longer than "
+                    "installing a prebuilt package and downloads the toolkit and GROMACS source."
+                )
+            panels.append(Panel(gromacs_text, title="GROMACS with NVIDIA CUDA", border_style="yellow"))
         else:
+            panels.append(
+                Panel(
+                    f"Detected {report.installation.detail} GROMACS already has CUDA GPU support.",
+                    title="GROMACS",
+                    border_style="green",
+                )
+            )
+    elif not report.installation:
+        if install_plan:
             instructions = (
-                "GROMACS was not found. Install the package supported by your operating system, ensure its "
-                "command is on PATH, and rerun the environment check."
+                f"GROMACS is missing. The Setup action can install the `gromacs` package from "
+                f"{install_plan.target}. The operating system repository selects the package version; "
+                "this project does not currently pin a specific GROMACS release. The app verifies the "
+                "installed version with `gmx --version`."
+            )
+            if install_plan.note:
+                instructions += f"\n\nGPU note: {install_plan.note}"
+        else:
+            instructions = install_problem or (
+                "Automatic installation is unavailable on this system. Install the package supported by your "
+                "operating system, ensure its command is on PATH, and rerun the environment check."
             )
         panels.append(Panel(instructions, title="GROMACS", border_style="yellow"))
     else:
+        detail = f"Detected {report.installation.detail}"
+        if install_plan and install_plan.note and not report.installation.gpu_backend:
+            detail += f"\n\nGPU note: {install_plan.note}"
         panels.append(
             Panel(
-                f"Detected {report.installation.detail}\n\n"
-                "Use the GROMACS tab to verify and save a command for future runs.",
+                detail + "\n\nUse the GROMACS tab to verify and save a command for future runs.",
                 title="GROMACS",
                 border_style="green",
             )
@@ -185,8 +217,8 @@ def _setup_instructions(report: EnvironmentReport) -> list[Panel]:
     panels.append(
         Panel(
             "The environment scan is read-only. Python package installation requires confirmation and is isolated "
-            "in the project .venv. GROMACS installation is guided from the system terminal; shell startup files "
-            "are never edited.",
+            "in the project .venv. GROMACS changes require confirmation. Compatible NVIDIA GPUs use the CUDA "
+            "toolkit and a verified GROMACS source build; other supported setups use the Debian/Ubuntu package.",
             title="Setup behavior",
             border_style="dim",
         )
@@ -361,6 +393,7 @@ class MDPipelineApp(App[None]):
         super().__init__()
         self.report: EnvironmentReport | None = None
         self.gromacs_candidate: GromacsInstallation | None = None
+        self.gromacs_install_plan: GromacsInstallPlan | None = None
         self.monitor: Any | None = None
         self.monitor_log_path: Path | None = None
         self.monitor_refresh_in_progress = False
@@ -383,6 +416,7 @@ class MDPipelineApp(App[None]):
                     yield Static("Environment scan running…", id="setup-copy")
                     with Horizontal(id="setup-actions"):
                         yield Button("Create .venv and install Python packages", id="setup-python", variant="primary")
+                        yield Button("Install GROMACS", id="setup-gromacs", disabled=True)
                     yield Static("", id="setup-status")
             with TabPane("GROMACS", id="gromacs"):
                 with VerticalScroll():
@@ -430,13 +464,40 @@ class MDPipelineApp(App[None]):
     @work(thread=True, exclusive=True)
     def _scan_environment(self) -> None:
         report = inspect_environment()
-        self.call_from_thread(self._apply_environment_report, report)
+        install_plan, install_problem = gromacs_install_plan()
+        self.call_from_thread(self._apply_environment_report, report, install_plan, install_problem)
 
-    def _apply_environment_report(self, report: EnvironmentReport) -> None:
+    def _apply_environment_report(
+        self,
+        report: EnvironmentReport,
+        install_plan: GromacsInstallPlan | None,
+        install_problem: str,
+    ) -> None:
         self.report = report
+        self.gromacs_install_plan = install_plan
         self.query_one("#home-summary", Static).update(build_home(report))
         self.query_one("#environment-view", Static).update(build_environment_view(report))
-        self.query_one("#setup-copy", Static).update(Group(*_setup_instructions(report)))
+        self.query_one("#setup-copy", Static).update(
+            Group(*_setup_instructions(report, self.gromacs_install_plan, install_problem))
+        )
+        install_button = self.query_one("#setup-gromacs", Button)
+        cuda_upgrade_needed = bool(
+            self.gromacs_install_plan
+            and self.gromacs_install_plan.gpu_backend
+            and (not report.installation or report.installation.gpu_backend != self.gromacs_install_plan.gpu_backend)
+        )
+        if cuda_upgrade_needed:
+            install_button.label = "Build CUDA-enabled GROMACS"
+            install_button.disabled = False
+        elif report.installation:
+            install_button.label = "GROMACS already installed"
+            install_button.disabled = True
+        elif self.gromacs_install_plan:
+            install_button.label = "Install GROMACS"
+            install_button.disabled = False
+        else:
+            install_button.label = "GROMACS install unavailable"
+            install_button.disabled = True
         command_input = self.query_one("#gromacs-command", Input)
         if command_input.value == "gmx" and report.installation:
             command_input.value = shlex.join(report.installation.command)
@@ -459,6 +520,8 @@ class MDPipelineApp(App[None]):
                 ),
                 self._confirm_python_setup,
             )
+        elif button_id == "setup-gromacs":
+            self._request_gromacs_install()
         elif button_id == "verify-gromacs":
             self._begin_gromacs_verification()
         elif button_id == "save-gromacs":
@@ -479,6 +542,58 @@ class MDPipelineApp(App[None]):
     def _show_setup_result(self, message: str) -> None:
         self.query_one("#setup-status", Static).update(message)
         if message.startswith("Python environment is ready"):
+            self._scan_environment()
+
+    def _request_gromacs_install(self) -> None:
+        plan = self.gromacs_install_plan
+        if not plan:
+            self.query_one("#setup-status", Static).update(
+                "GROMACS install is unavailable for this operating system. Refresh checks for current guidance."
+            )
+            return
+        if plan.gpu_backend == "CUDA":
+            confirmation = (
+                f"Build GROMACS {GROMACS_GPU_BUILD_VERSION} with NVIDIA CUDA support for {plan.target}. "
+                "This adds NVIDIA's signed CUDA package repository, installs the CUDA toolkit (not a Linux GPU "
+                "driver), compiles GROMACS from its official source archive, and installs it system-wide. "
+                "It can take several minutes and download multiple gigabytes. The terminal will show progress. Continue?"
+            )
+        else:
+            confirmation = (
+                f"Install the system package `gromacs` from {plan.target}? The package manager chooses the version "
+                "published for that distribution; this project does not pin an exact release. The installer will "
+                "update package lists, install GROMACS, and verify it with `gmx --version`. The terminal will show "
+                "package-manager output and may ask for your administrator password. Continue?"
+            )
+        self.push_screen(ConfirmDialog(confirmation), self._confirm_gromacs_install)
+
+    def _confirm_gromacs_install(self, confirmed: bool | None) -> None:
+        if not confirmed:
+            return
+        plan = self.gromacs_install_plan
+        if not plan:
+            self.query_one("#setup-status", Static).update(
+                "GROMACS install is unavailable for this operating system. Refresh checks for current guidance."
+            )
+            return
+        self.query_one("#setup-status", Static).update(
+            (
+                f"Building CUDA-enabled GROMACS from {plan.target}. The terminal will show installation and build progress…"
+                if plan.gpu_backend == "CUDA"
+                else f"Installing GROMACS from {plan.target}. The terminal is temporarily handed to the package manager…"
+            )
+        )
+        self._install_gromacs_worker(plan)
+
+    @work(thread=False, exclusive=True)
+    async def _install_gromacs_worker(self, plan: GromacsInstallPlan) -> None:
+        try:
+            with self.suspend():
+                message = await asyncio.to_thread(install_gromacs, plan)
+        except Exception as error:
+            message = f"GROMACS installation failed: {error}"
+        self.query_one("#setup-status", Static).update(message)
+        if message.startswith("GROMACS installed and verified:"):
             self._scan_environment()
 
     def _begin_gromacs_verification(self) -> None:
