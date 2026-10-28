@@ -1,10 +1,10 @@
 # MD Dashboard Prototype
 
 A Textual terminal prototype for molecular-dynamics project setup and GROMACS
-run monitoring. The overview shows the planned scientific workflow and checks
-the current Python and GROMACS environment. Separate tabs provide setup
-guidance, GROMACS command verification, monitoring for existing `mdrun` logs,
-and an analysis workspace placeholder for methods that will be supplied later.
+run monitoring. The overview summarizes the current Python and GROMACS
+environment. Separate tabs provide setup guidance, GROMACS command
+verification, monitoring for existing `mdrun` logs, and an analysis workspace
+placeholder for methods that will be supplied later.
 
 ## Features
 
@@ -12,7 +12,6 @@ and an analysis workspace placeholder for methods that will be supplied later.
 - Environment overview for Python, project packages, GROMACS, and WSL2
 - Guided setup instructions for missing Python dependencies or GROMACS
 - Verify and save a GROMACS executable command in per-user settings
-- Workflow preview from project setup through analysis
 - Analysis tab with Structural and Thermodynamic categories; Structural reveals inert RMSD, RMSF, and RoG placeholder buttons
 - Current step, simulated time, progress percentage, speed, and ETA
 - Latest temperature and pressure parsed from the GROMACS log

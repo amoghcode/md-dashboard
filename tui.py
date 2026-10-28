@@ -103,32 +103,13 @@ def build_home(report: EnvironmentReport) -> Group:
         Panel(report.operating_system, title="Platform"),
     )
 
-    workflow = Table(box=box.SIMPLE, expand=True, show_header=False)
-    workflow.add_column(width=4, style="bold cyan", justify="right")
-    workflow.add_column(style="bold")
-    workflow.add_column()
-    for number, (name, detail) in enumerate(
-        (
-            ("Project setup", "Choose a structure and project files"),
-            ("System preparation", "Topology, box, solvent, and ions"),
-            ("Preprocessing", "Generate and validate GROMACS run input"),
-            ("Energy minimisation", "Relax the system and review convergence"),
-            ("Equilibration", "Prepare the system for its target conditions"),
-            ("Production MD", "Run and monitor the main simulation"),
-            ("Analysis", "Inspect energy, trajectory, and selected properties"),
-        ),
-        start=1,
-    ):
-        workflow.add_row(f"{number}.", name, detail)
-
     return Group(
         Panel(
             Text("Molecular Dynamics Pipeline", style="bold white"),
-            subtitle="Prototype · environment and workflow overview",
+            subtitle="Prototype · environment overview",
             border_style="bright_blue",
         ),
         cards,
-        Panel(workflow, title="Simulation workflow", border_style="blue"),
     )
 
 
