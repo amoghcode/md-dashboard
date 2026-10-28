@@ -8,7 +8,7 @@ placeholder for methods that will be supplied later.
 
 ## Features
 
-- Tabbed Textual interface with overview, environment, setup, GROMACS, and monitor screens
+- Tabbed Textual interface with a combined overview, setup, GROMACS, and monitor screens
 - Environment overview for Python, project packages, GROMACS, and WSL2
 - Guided setup instructions for missing Python dependencies or GROMACS
 - Verify and save a GROMACS executable command in per-user settings

@@ -94,12 +94,14 @@ def build_home(report: EnvironmentReport) -> Group:
     gromacs_style = "green" if report.installation else "red"
 
     cards = Table.grid(expand=True, padding=(0, 1))
-    cards.add_column(ratio=1)
-    cards.add_column(ratio=1)
-    cards.add_column(ratio=1)
+    cards.add_column()
     cards.add_row(
         Panel(f"[{environment_style}]{environment_status}[/{environment_style}]", title="Python environment"),
+    )
+    cards.add_row(
         Panel(f"[{gromacs_style}]{gromacs_status}[/{gromacs_style}]", title="GROMACS"),
+    )
+    cards.add_row(
         Panel(report.operating_system, title="Platform"),
     )
 
@@ -304,6 +306,19 @@ class MDPipelineApp(App[None]):
     VerticalScroll {
         height: 1fr;
     }
+    #overview-layout {
+        height: 1fr;
+    }
+    #overview-left {
+        width: 2fr;
+        padding-right: 1;
+    }
+    #overview-right {
+        width: 3fr;
+        min-width: 48;
+        border: round $primary;
+        padding: 0 1;
+    }
     #home-summary, #environment-view, #setup-copy, #analysis-intro {
         height: auto;
         margin-bottom: 1;
@@ -354,12 +369,15 @@ class MDPipelineApp(App[None]):
         yield Header()
         with TabbedContent(initial="home"):
             with TabPane("Overview", id="home"):
-                with VerticalScroll():
-                    yield Static("Scanning this machine's Python and GROMACS environment…", id="home-summary")
-            with TabPane("Environment", id="environment"):
-                with VerticalScroll():
-                    yield Static("Environment scan running…", id="environment-view")
-                    yield Button("Refresh checks", id="refresh-environment", variant="primary")
+                with Horizontal(id="overview-layout"):
+                    with VerticalScroll(id="overview-left"):
+                        yield Static(
+                            "Scanning this machine's Python and GROMACS environment…",
+                            id="home-summary",
+                        )
+                    with VerticalScroll(id="overview-right"):
+                        yield Static("Environment scan running…", id="environment-view")
+                        yield Button("Refresh checks", id="refresh-environment", variant="primary")
             with TabPane("Setup", id="setup"):
                 with VerticalScroll():
                     yield Static("Environment scan running…", id="setup-copy")
