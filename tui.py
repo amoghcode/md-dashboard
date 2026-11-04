@@ -567,7 +567,7 @@ class MDPipelineApp(App[None]):
             confirmation = (
                 f"Install the system package `gromacs` from {plan.target}? The package manager chooses the version "
                 "published for that distribution; this project does not pin an exact release. The installer will "
-                "update package lists, install GROMACS, and verify it with `gmx --version`. The terminal will show "
+                "check build prerequisites, build lab-default GROMACS 2026.2 in your personal folder, and verify it with `gmx --version`. The terminal will show "
                 "package-manager output and may ask for your administrator password. Continue?"
             )
         self.push_screen(ConfirmDialog(confirmation), self._confirm_gromacs_install)

@@ -47,19 +47,20 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-On Windows, the app can install GROMACS into an existing default Ubuntu or
-Debian WSL distribution. On Debian or Ubuntu, the Setup tab installs the system
-`gromacs` package after confirmation. When an NVIDIA GPU with CUDA compute
-capability 5.0 or newer is visible inside an Ubuntu 24.04 or 26.04 x86-64
-environment, Setup instead installs a compatible NVIDIA CUDA toolkit and builds
-GROMACS 2026.4 from its official source archive. CUDA 12.9 is selected for older
-NVIDIA architectures or drivers; newer hardware uses a compatible CUDA 13
-toolkit. On Windows, the GPU and driver must also be available inside WSL2. The
-CUDA build can take several minutes and downloads several gigabytes. Other
-systems use the repository package or show platform guidance. Intel and AMD GPU
-builds are not installed automatically yet. Python requirements are installed
-separately in the project `.venv` after confirmation. The installer does not
-edit shell startup files or change GPU drivers.
+Setup builds the lab default GROMACS 2026.2 from source for both CPU and NVIDIA
+CUDA modes. Builds run as the normal Linux/WSL user and install separately under
+~/software/gromacs-2026.2-cpu or ~/software/gromacs-2026.2-gpu. Only prerequisite
+packages require sudo. Existing directories are preserved, and the verified
+command is saved for subsequent use.
+
+Preflight requires at least 2 GiB available RAM and 6 GiB free space in HOME,
+CMake 3.28+, and working C/C++ compilers. Parallelism is limited by available
+memory and cores (maximum four jobs). CUDA compiles a small test with the selected
+CXX compiler before downloading GROMACS; unsupported combinations stop with
+guidance to set CC/CXX. The build configuration and version output are retained
+in the installation directory. A version check verifies the binary, not a real
+GPU simulation. Use the GROMACS screen to select other existing installations.
+CPU fallback remains explicit in the setup plan when GPU prerequisites are unsupported.
 
 ## Usage
 
