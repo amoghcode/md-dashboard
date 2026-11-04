@@ -9,7 +9,8 @@ def validate_analysis(request):
     for key in ("topology", "trajectory"):
         if not Path(request[key]).is_file():
             raise ValueError("Missing "+key+" file")
-    with mda.Universe(request["topology"], request["trajectory"]) as universe:
+    universe = mda.Universe(request["topology"], request["trajectory"])
+    try:
         first = universe.trajectory[0].time / 1000
         last = universe.trajectory[-1].time / 1000
         if begin > last or (end != -1 and end < first):
@@ -34,3 +35,6 @@ def validate_analysis(request):
                 raise ValueError("Selected group is empty for this system.")
         return {"atoms": len(universe.atoms), "frames": len(universe.trajectory),
                 "first_ns": first, "last_ns": last, "warnings": warnings}
+
+    finally:
+        universe.trajectory.close()
