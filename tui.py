@@ -429,19 +429,20 @@ class MDPipelineApp(App[None]):
                     yield Static("", id="gromacs-status")
             with TabPane("Monitor", id="monitor"):
                 with VerticalScroll():
-                    yield Static("Watch an existing GROMACS log. This prototype does not launch a simulation.")
+                    yield Static("Watch an existing GROMACS log or launch a prepared simulation.")
                     yield Static("GROMACS log path", classes="field-label")
                     yield Input(placeholder="/path/to/md.log", id="monitor-log-path")
                     yield Static("Optional MDP file", classes="field-label")
                     yield Input(placeholder="/path/to/run.mdp", id="monitor-mdp-path")
                     with Horizontal(id="monitor-actions"):
                         yield Button("Start monitoring", id="start-monitor", variant="primary")
+                    yield Button("Run prepared simulation", id="run-simulation")
                     yield Static("Enter a log path to begin.", id="monitor-status")
                     yield Static("", id="monitor-view")
             with TabPane("Analysis", id="analysis"):
                 with VerticalScroll():
                     yield Static(
-                        "Select Structural to reveal its placeholder options. Thermodynamic is reserved for a future update.",
+                        "Select Structural to run RMSD, RMSF or RoG. Thermodynamic analysis is planned.",
                         id="analysis-intro",
                     )
                     with Horizontal(id="analysis-categories"):
@@ -449,7 +450,7 @@ class MDPipelineApp(App[None]):
                         yield Button("Thermodynamic", id="analysis-thermodynamic")
                     with Vertical(id="analysis-structural-view"):
                         yield Static(
-                            "These options are placeholders; selecting one currently has no effect."
+                            "Select a method to configure and run an analysis."
                         )
                         with Horizontal(id="analysis-methods"):
                             yield Button("RMSD", id="analysis-rmsd")
@@ -508,7 +509,11 @@ class MDPipelineApp(App[None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
-        if button_id == "analysis-structural":
+        if button_id in {"analysis-rmsd", "analysis-rmsf", "analysis-rog", "run-simulation"}:
+            from workflow_ui import WorkflowScreen
+            mode = {"analysis-rmsd":"RMSD", "analysis-rmsf":"RMSF", "analysis-rog":"RoG", "run-simulation":"Simulation"}[button_id]
+            self.push_screen(WorkflowScreen(mode, self.query_one("#gromacs-command", Input).value))
+        elif button_id == "analysis-structural":
             self.query_one("#analysis-structural-view", Vertical).display = True
         elif button_id == "refresh-environment":
             self.action_refresh_environment()
@@ -562,7 +567,7 @@ class MDPipelineApp(App[None]):
             confirmation = (
                 f"Install the system package `gromacs` from {plan.target}? The package manager chooses the version "
                 "published for that distribution; this project does not pin an exact release. The installer will "
-                "update package lists, install GROMACS, and verify it with `gmx --version`. The terminal will show "
+                "check build prerequisites, build lab-default GROMACS 2026.2 in your personal folder, and verify it with `gmx --version`. The terminal will show "
                 "package-manager output and may ask for your administrator password. Continue?"
             )
         self.push_screen(ConfirmDialog(confirmation), self._confirm_gromacs_install)

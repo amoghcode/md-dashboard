@@ -24,8 +24,8 @@ NVIDIA_GPU_QUERY = (
     "--query-gpu=name,compute_cap,driver_version",
     "--format=csv,noheader",
 )
-GROMACS_GPU_BUILD_VERSION = "2026.4"
-GROMACS_GPU_BUILD_MD5 = "fbe7d5071dee17e3f448502b1fd30d55"
+GROMACS_GPU_BUILD_VERSION = "2026.2"
+GROMACS_GPU_BUILD_MD5 = "74c859cb7f53919f9c7760c287b43323"
 GROMACS_GPU_BUILD_URL = (
     f"https://ftp.gromacs.org/gromacs/gromacs-{GROMACS_GPU_BUILD_VERSION}.tar.gz"
 )
@@ -96,13 +96,7 @@ def _linux_gromacs_install_plan(
     if not is_root and not sudo:
         return None, "Install GROMACS from a system terminal with administrator privileges."
 
-    privilege = () if is_root else (sudo,)
-    commands = (
-        (*privilege, apt_get, "update"),
-        (*privilege, apt_get, "install", "-y", "gromacs"),
-    )
-    target = f"{distro_name or distro_id} package repositories (system-wide)"
-    return GromacsInstallPlan(commands, ("gmx",), "native", target), ""
+    return _local_build_plan((), "native", "cpu"), ""
 
 
 def _parse_nvidia_gpu_query(output: str) -> NvidiaGPU | None:
@@ -132,39 +126,21 @@ def _gpu_build_script(
 ) -> str:
     """Build a pinned GROMACS release with CUDA using the official source archive."""
 
-    return f'''set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y ca-certificates wget build-essential cmake
-wget -q -O /tmp/cuda-keyring.deb "{cuda_repository}/cuda-keyring_1.1-1_all.deb"
-dpkg -i /tmp/cuda-keyring.deb
-apt-get update
-apt-get install -y {toolkit_package}
+    from installer_policy import build_script
+    return build_script("gpu", cuda_repository, toolkit_package, toolkit_version)
 
-work_dir="$(mktemp -d /tmp/md-gromacs-cuda-build.XXXXXX)"
-trap 'case "$work_dir" in /tmp/md-gromacs-cuda-build.*) rm -rf -- "$work_dir" ;; esac' EXIT
-cd "$work_dir"
-wget -q -O gromacs.tar.gz "{GROMACS_GPU_BUILD_URL}"
-echo "{GROMACS_GPU_BUILD_MD5}  gromacs.tar.gz" | md5sum --check -
-tar -xzf gromacs.tar.gz
 
-for nvcc in /usr/local/cuda-{toolkit_version}/bin/nvcc /usr/local/cuda/bin/nvcc /usr/local/cuda-*/bin/nvcc; do
-    if [ -x "$nvcc" ]; then
-        export PATH="$(dirname "$nvcc"):$PATH"
-        export CUDAToolkit_ROOT="$(dirname "$(dirname "$nvcc")")"
-        break
-    fi
-done
-command -v nvcc >/dev/null
-cmake -S "gromacs-{GROMACS_GPU_BUILD_VERSION}" -B build \\
-    -DGMX_GPU=CUDA -DGMX_BUILD_OWN_FFTW=ON -DCMAKE_INSTALL_PREFIX=/usr/local
-jobs="$(nproc)"
-if [ "$jobs" -gt 4 ]; then jobs=4; fi
-cmake --build build --parallel "$jobs"
-cmake --install build
-ldconfig
-/usr/local/bin/gmx --version
-'''
+def _local_build_plan(runner, source, mode, script=None, note=""):
+    prefix = tuple(runner)
+    probe = (*prefix, "bash", "-lc", 'exec "$HOME/software/gromacs-2026.2-' + mode + '/bin/gmx" "$@"', 'gmx')
+    # Forward executable arguments through bash without expanding the user home in Python.
+    from installer_policy import build_script
+    return GromacsInstallPlan(
+        commands=((*prefix, "bash", "-lc", script or build_script(mode)),),
+        probe_command=probe, source=source,
+        target=f"GROMACS 2026.2 lab default; ~/software/gromacs-2026.2-{mode} (user-local)",
+        gpu_backend="CUDA" if mode == "gpu" else None, note=note)
+
 
 
 def _nvidia_cuda_gromacs_install_plan(
@@ -217,21 +193,12 @@ def _nvidia_cuda_gromacs_install_plan(
     if toolkit_version == "12.9" and repository_version != "2404":
         return None, "CUDA 12.9 builds for older GPUs or drivers currently require Ubuntu 24.04."
     script = _gpu_build_script(repository, toolkit_package, toolkit_version)
-    command = (*runner, "bash", "-lc", script)
-    target = (
-        f"GROMACS {GROMACS_GPU_BUILD_VERSION} built with CUDA {toolkit_version} for {gpu.name} "
-        "(system-wide; NVIDIA CUDA Toolkit from NVIDIA's signed APT repository)"
-    )
-    return (
-        GromacsInstallPlan(
-            commands=(command,),
-            probe_command=("/usr/local/bin/gmx",) if source == "native" else (*runner, "/usr/local/bin/gmx"),
-            source=source,
-            target=target,
-            gpu_backend="CUDA",
-        ),
-        "",
-    )
+    user_runner = tuple(runner)
+    if source == "WSL":
+        user_runner = tuple(x for x in runner if x not in ("--user", "root"))
+    elif user_runner and Path(user_runner[0]).name == "sudo":
+        user_runner = ()
+    return _local_build_plan(user_runner, source, "gpu", script), ""
 
 
 def _wsl_gromacs_install_plan(
@@ -248,14 +215,7 @@ def _wsl_gromacs_install_plan(
     if distro_id not in {"debian", "ubuntu"}:
         return None, "Automatic Windows installation needs an existing default Ubuntu or Debian WSL distribution."
 
-    root_apt = (wsl, "--user", "root", "--exec", "apt-get")
-    commands = (
-        (*root_apt, "update"),
-        (*root_apt, "install", "-y", "gromacs"),
-    )
-    target = f"the default WSL {distro_id.title()} package repositories (system-wide)"
-    probe_command = (wsl, "--exec", "gmx")
-    return GromacsInstallPlan(commands, probe_command, "WSL", target, note=note), ""
+    return _local_build_plan((wsl, "--exec"), "WSL", "cpu", note=note), ""
 
 
 def _parse_os_release(os_release: str) -> dict[str, str]:
@@ -353,7 +313,7 @@ def gromacs_install_plan() -> tuple[GromacsInstallPlan | None, str]:
             wsl,
             result.stdout,
             note=(
-                "No compatible NVIDIA GPU was detected inside WSL. The repository package may use the CPU only. "
+                "No compatible NVIDIA GPU was detected inside WSL. A pinned user-local CPU build will be offered. "
                 "Automatic GPU builds currently target NVIDIA GPUs with CUDA."
             ),
         )
@@ -402,7 +362,7 @@ def gromacs_install_plan() -> tuple[GromacsInstallPlan | None, str]:
         return replace(
             cpu_plan,
             note=(
-                "No compatible NVIDIA GPU was detected. The repository package may use the CPU only. "
+                "No compatible NVIDIA GPU was detected. A pinned user-local CPU build will be offered. "
                 "Automatic GPU builds currently target NVIDIA GPUs with CUDA."
             ),
         ), ""
@@ -437,6 +397,7 @@ def install_gromacs(plan: GromacsInstallPlan) -> str:
             f"GROMACS installed, but the requested {plan.gpu_backend} GPU support was not found in its build. "
             "Review the build output and refresh the environment checks."
         )
+    save_gromacs_command(plan.probe_command, installation.version)
     return f"GROMACS installed and verified: {installation.detail} Source: {plan.target}."
 
 
