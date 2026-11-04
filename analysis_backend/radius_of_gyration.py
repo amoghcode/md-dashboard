@@ -18,7 +18,20 @@ _EXPECTED_LEGENDS = ["rg", "rgx", "rgy", "rgz"]
 
 
 def _norm_legend(s: str) -> str:
-    return re.sub(r"[^a-z]", "", s.lower())
+    """Canonicalise known plain and Grace-subscript series labels only."""
+    label = s.strip().lower()
+    if label == "rg":
+        return "rg"
+    plain = re.fullmatch(r"rg_?([xyz])|rg\(([xyz])\)", label)
+    if plain:
+        return "rg" + next(group for group in plain.groups() if group)
+    # GROMACS XVG uses /s ... /N (or Grace backslash equivalents)
+    # to start a subscript and restore normal text.
+    formatted = re.fullmatch(r"rg[/\\]s([xyz])[/\\]n", label)
+    if formatted:
+        return "rg" + formatted.group(1)
+    return label
+
 
 
 def _total_rg_column(legends: Sequence[str]) -> Optional[int]:

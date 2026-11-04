@@ -237,3 +237,26 @@ class TestSkipsAndFailures(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFormattedLegends(Base):
+    def test_gromacs_subscripts_preserve_total_and_components(self):
+        for separator in ("/", chr(92)):
+            with self.subTest(separator=separator):
+                legends = '@ s0 legend "Rg"' + chr(10)
+                for i, axis in enumerate("XYZ", 1):
+                    legends += f'@ s{i} legend "Rg{separator}s{axis}{separator}N"' + chr(10)
+                result = self.run_with(xvg([0, 10, 20], [2., 3., 4.], legends=legends, x_label="Time (ps)"))
+                np.testing.assert_allclose(result.data["Rg"], [2., 3., 4.])
+                np.testing.assert_allclose(result.data["Rg_X"], [1., 1.5, 2.])
+                self.assertTrue(os.path.isfile(result.output_csv))
+
+    def test_unknown_duplicate_and_reordered_components_rejected(self):
+        for labels in (
+            ["Rg", "Rg/sQ/N", "Rg/sY/N", "Rg/sZ/N"],
+            ["Rg", "Rg/sX/N", "Rg/sX/N", "Rg/sZ/N"],
+            ["Rg", "Rg/sY/N", "Rg/sX/N", "Rg/sZ/N"],
+        ):
+            legends = "".join(f'@ s{i} legend "{label}"' + chr(10) for i, label in enumerate(labels))
+            with self.subTest(labels=labels), self.assertRaisesRegex(ValueError, "legends"):
+                self.run_with(xvg([0,10], [2.,3.], legends=legends))
