@@ -10,6 +10,10 @@ from execution import gmx_command
 def main():
     request_path = Path(sys.argv[1]).resolve()
     request = json.loads(request_path.read_text())
+    def stage_status(stage):
+        temp = request_path.parent / "stage.tmp"
+        temp.write_text(json.dumps({"stage":stage}))
+        temp.replace(request_path.parent / "stage.json")
     os.chdir(request_path.parent)
     if request.get("resume"):
         target = Path(request["resume"]).resolve()
@@ -18,6 +22,7 @@ def main():
             raise ValueError("Resume requires a simulation created by this application.")
         if not (target/"npt_prod.cpt").is_file() or not (target/"npt_prod.tpr").is_file():
             raise ValueError("Production checkpoint and original TPR are required.")
+        stage_status("npt_prod")
         os.chdir(target)
         subprocess.run(gmx_command()+["mdrun","-deffnm","npt_prod","-s","npt_prod.tpr","-cpi","npt_prod.cpt","-append"],check=True)
         return
@@ -56,6 +61,7 @@ def main():
     mode=request["device"].lower()
     if mode not in ("auto","cpu","gpu"): raise ValueError("Device must be auto, cpu or gpu")
     for stage, coordinates in (("em","box_mixed.gro"),("npt_eq","em.gro"),("npt_prod","npt_eq.gro")):
+        stage_status(stage)
         print("Preparing "+stage,flush=True)
         args=["grompp","-f",stage+".mdp","-c",coordinates,"-p","system.top","-o",stage+".tpr"]
         if stage=="npt_prod": args += ["-t","npt_eq.cpt"]

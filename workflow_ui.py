@@ -43,8 +43,10 @@ class WorkflowScreen(Screen):
             yield Static("New results parent folder")
             yield Input(value=str(Path("results").resolve()), id="destination")
             yield Button("Run", id="execute")
-            yield Button("Stop", id="stop")
+            yield Button("Stop", id="stop", disabled=True)
             yield Button("Back", id="back")
+            yield Static("", id="run-stage", markup=False)
+            yield Static("", id="live-monitor")
             yield Static("", id="state", markup=False)
     def on_button_pressed(self, event):
         if event.button.id == "back":
@@ -62,6 +64,18 @@ class WorkflowScreen(Screen):
             self.query_one("#execute", Button).disabled = True
             values = {w.id:w.value for w in self.query(Input)}
             self.run_job(values)
+    def show_run_monitor(self, stage, renderable):
+        self.query_one("#run-stage", Static).update("Active stage: " + stage)
+        self.query_one("#live-monitor", Static).update(renderable)
+
+    def set_running(self, running):
+        self.query_one("#stop", Button).disabled = not running
+        self.query_one("#execute", Button).disabled = running
+        if running and self.mode == "Simulation":
+            self.query_one("#run-stage", Static).update("Preparing simulation; waiting for the first stage...")
+            self.query_one("#run-stage", Static).scroll_visible()
+
+
     @work(thread=True)
     def run_job(self, values):
         folder = None
@@ -86,17 +100,36 @@ class WorkflowScreen(Screen):
             if is_wsl:
                 from wsl_execution import worker_command as wsl_worker_command
                 worker_command = wsl_worker_command(tokens, request_path, env)
+            follower = None
+            if self.mode == "Simulation":
+                from run_monitor import LaunchedRunMonitor
+                follower = LaunchedRunMonitor(folder, values.get("resume") or folder/"inputs")
+            self.app.call_from_thread(self.set_running, True)
+            def refresh():
+                if follower:
+                    try:
+                        state = follower.snapshot()
+                        if state:
+                            from dashboard import build_dashboard
+                            stage, snapshot = state
+                            view = build_dashboard(snapshot, follower.inputs_folder/(stage+".log"))
+                            self.app.call_from_thread(self.show_run_monitor, stage, view)
+                    except Exception as error:
+                        self.app.call_from_thread(self.query_one("#run-stage", Static).update,
+                                                  "Monitor refresh: "+str(error))
             with (folder/"execution.log").open("w") as log:
                 self.process = subprocess.Popen(worker_command, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=(os.name == "posix"))
                 import time
                 while self.process.poll() is None:
+                    refresh()
                     text = (folder/"execution.log").read_text(errors="replace")
                     self.app.call_from_thread(self.query_one("#state", Static).update, "Running: "+str(folder)+"\n"+text[-2500:])
                     time.sleep(.5)
+            refresh()
             if self.process.returncode:
                 raise RuntimeError((folder/"execution.log").read_text(errors="replace")[-3000:])
             self.app.call_from_thread(self.query_one("#state", Static).update, "Completed. Results: "+str(folder))
         except Exception as exc:
             self.app.call_from_thread(self.query_one("#state", Static).update, "Stopped or failed: "+str(exc))
         finally:
-            self.app.call_from_thread(setattr, self.query_one("#execute", Button), "disabled", False)
+            self.app.call_from_thread(self.set_running, False)
