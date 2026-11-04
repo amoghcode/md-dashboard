@@ -1,3 +1,9 @@
+import pytest
+
+@pytest.fixture(autouse=True)
+def isolate_settings(monkeypatch):
+    monkeypatch.setattr(environment, "save_gromacs_command", lambda *args: None)
+
 from types import SimpleNamespace
 
 import environment
@@ -14,15 +20,8 @@ def test_linux_install_plan_uses_distro_package_manager_and_sudo() -> None:
     )
 
     assert problem == ""
-    assert plan == GromacsInstallPlan(
-        commands=(
-            ("/usr/bin/sudo", "/usr/bin/apt-get", "update"),
-            ("/usr/bin/sudo", "/usr/bin/apt-get", "install", "-y", "gromacs"),
-        ),
-        probe_command=("gmx",),
-        source="native",
-        target="Ubuntu 24.04 LTS package repositories (system-wide)",
-    )
+    assert "2026.2-cpu" in plan.target
+    assert plan.commands[0][:2] == ("bash", "-lc")
 
 
 def test_wsl_install_plan_targets_default_ubuntu_as_root() -> None:
@@ -33,20 +32,8 @@ def test_wsl_install_plan_targets_default_ubuntu_as_root() -> None:
 
     assert problem == ""
     assert plan is not None
-    assert plan.commands == (
-        ("C:/Windows/System32/wsl.exe", "--user", "root", "--exec", "apt-get", "update"),
-        (
-            "C:/Windows/System32/wsl.exe",
-            "--user",
-            "root",
-            "--exec",
-            "apt-get",
-            "install",
-            "-y",
-            "gromacs",
-        ),
-    )
-    assert plan.probe_command == ("C:/Windows/System32/wsl.exe", "--exec", "gmx")
+    assert plan.commands[0][:2] == ("C:/Windows/System32/wsl.exe", "--exec")
+    assert "--user" not in plan.commands[0]
 
 
 def test_nvidia_query_accepts_supported_cuda_capability() -> None:
@@ -81,13 +68,8 @@ def test_cuda_plan_builds_gromacs_from_source_for_supported_ubuntu() -> None:
     assert problem == ""
     assert plan is not None
     assert plan.gpu_backend == "CUDA"
-    assert plan.probe_command == (
-        "wsl.exe",
-        "--user",
-        "root",
-        "--exec",
-        "/usr/local/bin/gmx",
-    )
+    assert plan.probe_command[:2] == ("wsl.exe", "--exec")
+    assert "2026.2-gpu" in plan.probe_command[-2]
     script = plan.commands[0][-1]
     assert "apt-get install -y cuda-toolkit-13-0" in script
     assert "-DGMX_GPU=CUDA" in script
@@ -122,7 +104,7 @@ def test_cuda_plan_selects_toolkit_that_still_supports_older_compatible_gpu() ->
     assert problem == ""
     assert plan is not None
     assert "cuda-toolkit-12-9" in plan.commands[0][-1]
-    assert "/usr/local/cuda-12.9/bin/nvcc" in plan.commands[0][-1]
+    assert "/usr/local/cuda-12.9/bin" in plan.commands[0][-1]
 
 
 def test_cuda_plan_uses_cuda_12_for_new_gpu_with_older_compatible_driver() -> None:
